@@ -1,0 +1,26 @@
+---
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: EnvironmentConfig
+metadata:
+  name: prod-conf
+  labels:
+    env: prod
+data:
+  defaults:
+    diskSize: 40
+  availabilityType: REGIONAL
+  region: us-west2
+  tier: db-g1-small
+---
+apiVersion: apiextensions.crossplane.io/v1alpha1
+kind: EnvironmentConfig
+metadata:
+  name: dev-conf
+  labels:
+    env: dev
+data:
+  defaults:
+    diskSize: 10
+  availabilityType: ZONAL
+  region: us-west1
+  tier: db-f1-micro

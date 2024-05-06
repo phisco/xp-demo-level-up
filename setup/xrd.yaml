@@ -1,0 +1,42 @@
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xacmedatabases.acme.com
+spec:
+  group: acme.com
+  names:
+    kind: XAcmeDatabase
+    plural: xacmedatabases
+  claimNames:
+    kind: AcmeDatabase
+    plural: acmedatabases
+  connectionSecretKeys:
+    - connectionName
+    - publicIP
+    - serverCACertificateCert
+    - port
+  versions:
+  - name: v1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              environment:
+                type: string
+                enum:
+                  - prod
+                  - dev
+              storageGB:
+                type: integer
+                description: "The desired storage capacity of the database, in GB. Defaults to environment specific value if not set"
+              createDB:
+                description: "Whether a Database needs to be created too."
+                type: boolean
+            required:
+              - environment

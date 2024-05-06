@@ -1,0 +1,116 @@
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xacmedatabases.acme.com
+spec:
+  compositeTypeRef:
+    apiVersion: acme.com/v1
+    kind: XAcmeDatabase
+  mode: Pipeline
+  writeConnectionSecretsToNamespace: crossplane-system
+  pipeline:
+  - step: environmentConfigs
+    functionRef:
+      name: function-environment-configs
+    input:
+      apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+      kind: Input
+      spec:
+        environmentConfigs:
+          - type: Selector
+            selector:
+              mode: Single
+              matchLabels:
+                - type: FromCompositeFieldPath
+                  key: env
+                  valueFromFieldPath: spec.environment
+  - step: patch-and-transform
+    functionRef:
+      name: function-patch-and-transform
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - name: DBInstance
+        base:
+          apiVersion: sql.gcp.upbound.io/v1beta1
+          kind: DatabaseInstance
+          spec:
+            forProvider:
+              databaseVersion: POSTGRES_13
+              deletionProtection: false
+            writeConnectionSecretToRef:
+              namespace: crossplane-system
+        patches:
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: region
+          toFieldPath: spec.forProvider.region
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: availabilityType
+          toFieldPath: spec.forProvider.settings[0].availabilityType
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: tier
+          toFieldPath: spec.forProvider.settings[0].tier
+
+        # Setting the Disk size, first the default from the environment...
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: defaults.diskSize
+          toFieldPath: spec.forProvider.settings[0].diskSize
+        # ... then the one specified by the user, if any.
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.settings[0].diskSize
+
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.writeConnectionSecretToRef.name
+          transforms:
+          - string:
+              fmt: '%s-postgresql'
+              type: Format
+            type: string
+        connectionDetails:
+        - type: FromConnectionSecretKey
+          fromConnectionSecretKey: connectionName
+          name: connectionName
+        - fromConnectionSecretKey: publicIP
+          name: publicIP
+          type: FromConnectionSecretKey
+        - fromConnectionSecretKey: serverCACertificateCert
+          name: serverCACertificateCert
+          type: FromConnectionSecretKey
+        - name: port
+          type: FromValue
+          value: "5432"
+
+      - name: DB
+        base:
+          apiVersion: sql.gcp.upbound.io/v1beta1
+          kind: Database
+          spec:
+            forProvider:
+              instanceSelector:
+                matchControllerRef: true
+
+  - step: sequence
+    functionRef:
+      name: function-sequencer
+    input:
+      apiVersion: sequencer.fn.crossplane.io/v1beta1
+      kind: Input
+      rules:
+        - sequence:
+          - DBInstance
+          - DB
+
+  - step: filter
+    functionRef:
+      name: function-cel-filter
+    input:
+      apiVersion: cel.fn.crossplane.io/v1beta1
+      kind: Filters
+      filters:
+      # Only create the database if the XR's spec.createDB field is set to true
+      - name: DB
+        expression: has(observed.composite.resource.spec.createDB) && observed.composite.resource.spec.createDB == true

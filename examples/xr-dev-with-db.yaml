@@ -1,0 +1,11 @@
+---
+apiVersion: acme.com/v1
+kind: XAcmeDatabase
+metadata:
+  name: acme-db-dev
+spec:
+  environment: dev
+  createDB: true
+  writeConnectionSecretToRef:
+    name: acme-db-dev-conn
+    namespace: default
