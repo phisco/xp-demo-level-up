@@ -10,6 +10,8 @@ spec:
   mode: Pipeline
   writeConnectionSecretsToNamespace: crossplane-system
   pipeline:
+
+  # Let's read the right EnvironmentConfig for the selected environment
   - step: environmentConfigs
     functionRef:
       name: function-environment-configs
@@ -25,6 +27,8 @@ spec:
                 - type: FromCompositeFieldPath
                   key: env
                   valueFromFieldPath: spec.environment
+
+  # Usual Patch and transform creating a DBInstance and a Database for it
   - step: patch-and-transform
     functionRef:
       name: function-patch-and-transform
@@ -84,6 +88,8 @@ spec:
           type: FromValue
           value: "5432"
 
+      # We should not be creating this resource until the DBInstance is ready.
+      # We should not be creating this resource if the user didn't specify to.
       - name: DB
         base:
           apiVersion: sql.gcp.upbound.io/v1beta1
@@ -93,6 +99,7 @@ spec:
               instanceSelector:
                 matchControllerRef: true
 
+  # We set the Database to be only created once the DBInstance is ready
   - step: sequence
     functionRef:
       name: function-sequencer
@@ -104,6 +111,7 @@ spec:
           - DBInstance
           - DB
 
+  # We filter out the Database if the user didn't explicitly ask to create it.
   - step: filter
     functionRef:
       name: function-cel-filter
